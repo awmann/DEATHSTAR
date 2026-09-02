@@ -37,6 +37,7 @@ import pandas as pd
 
 # Plotting data
 import matplotlib
+matplotlib.use("Agg")  # non-interactive: save to file instead of opening blocking GUI windows
 from matplotlib import pyplot as plot
 from mpl_toolkits.axes_grid1 import make_axes_locatable # Color log
 from astropy.io import fits
@@ -238,7 +239,7 @@ def plot_ZTF_scatter(mini_ax, column_name, immediate_comparison_stars, horizonta
         toi_info["signal_y_bottom"] = signal_y_bottom
         toi_info["signal_y_top"] = signal_y_top
 
-def plot_ATLAS_scatter(mini_ax, column_name, immediate_comparison_stars, horizontal, markersize, toi_info, clean_dataframe):
+def plot_ATLAS_scatter(mini_ax, column_name, immediate_comparison_stars, horizontal, markersize, toi_info, cone, clean_dataframe, lists):
     # Separating each filter
     ZTF_o_dataframe = clean_dataframe[(clean_dataframe["image_filter"] == "o")]
     ZTF_c_dataframe = clean_dataframe[(clean_dataframe["image_filter"] == "c")]
@@ -249,14 +250,14 @@ def plot_ATLAS_scatter(mini_ax, column_name, immediate_comparison_stars, horizon
     star_c_with_comparison = (np.array(ZTF_c_dataframe[column_name]) / get_comparison_sums(ZTF_c_dataframe[immediate_comparison_stars].copy(), immediate_comparison_stars)) / np.median((np.array(ZTF_c_dataframe[column_name]) / get_comparison_sums(ZTF_c_dataframe[immediate_comparison_stars].copy(), immediate_comparison_stars)))
     median_absolute_deviation_c = stats.median_abs_deviation(star_c_with_comparison)
     
-    MAD_list["o"].append(median_absolute_deviation_o / np.median(star_o_with_comparison))
-    MAD_list["c"].append(median_absolute_deviation_c / np.median(star_c_with_comparison))
-    MAG_list.append(cone.at[list(cone["ID"]).index(int(column_name.split("_")[0])), "Tmag"])
-    if column_name in comparison_stars_list:
-        MAD_comparison_list["o"].append(median_absolute_deviation_o / np.median(star_o_with_comparison))
-        MAD_comparison_list["c"].append(median_absolute_deviation_c / np.median(star_c_with_comparison))
-        MAG_comparison_list.append(cone.at[list(cone["ID"]).index(int(column_name.split("_")[0])), "Tmag"])
-        MAG_vs_MAD_comparison_name_list.append(column_name)
+    lists["MAD"]["o"].append(median_absolute_deviation_o / np.median(star_o_with_comparison))
+    lists["MAD"]["c"].append(median_absolute_deviation_c / np.median(star_c_with_comparison))
+    lists["MAG"].append(cone.at[list(cone["ID"]).index(int(column_name.split("_")[0])), "Tmag"])
+    if column_name in lists["comparison_stars"]:
+        lists["MAD_comparison"]["o"].append(median_absolute_deviation_o / np.median(star_o_with_comparison))
+        lists["MAD_comparison"]["c"].append(median_absolute_deviation_c / np.median(star_c_with_comparison))
+        lists["MAG_comparison"].append(cone.at[list(cone["ID"]).index(int(column_name.split("_")[0])), "Tmag"])
+        lists["MAD_vs_MAG_comparison_names"].append(column_name)
     
     max_median_absolute_deviation = max((1 / (median_absolute_deviation_c ** 2)), (1 / (median_absolute_deviation_o ** 2)))
     if max_median_absolute_deviation == (1 / (median_absolute_deviation_o ** 2)):
@@ -269,18 +270,18 @@ def plot_ATLAS_scatter(mini_ax, column_name, immediate_comparison_stars, horizon
         o_alpha = (1 / (median_absolute_deviation_o ** 2)) / max_median_absolute_deviation
         if o_alpha < 0.15:
             o_alpha = 0.15
-        mini_ax.plot(make_bjd_time_mod_period(np.array(ZTF_o_dataframe["time"]), period, transit_epoch), star_o_with_comparison, ".", color = "r", alpha = o_alpha, markersize = markersize)
+        mini_ax.plot(make_bjd_time_mod_period(np.array(ZTF_o_dataframe["time"]), toi_info["period"], toi_info["epoch"]), star_o_with_comparison, ".", color = "r", alpha = o_alpha, markersize = markersize)
     if not ZTF_c_dataframe.empty:
         c_alpha = (1 / (median_absolute_deviation_c ** 2)) / max_median_absolute_deviation
         if c_alpha < 0.15:
             c_alpha = 0.15
-        mini_ax.plot(make_bjd_time_mod_period(np.array(ZTF_c_dataframe["time"]), period, transit_epoch), star_c_with_comparison, ".", color = "b", alpha = c_alpha, markersize = markersize)
-    
-    if column_name == str(signal_tic_ID.split()[1]) + "_brightness":
+        mini_ax.plot(make_bjd_time_mod_period(np.array(ZTF_c_dataframe["time"]), toi_info["period"], toi_info["epoch"]), star_c_with_comparison, ".", color = "b", alpha = c_alpha, markersize = markersize)
+
+    if column_name == str(toi_info["signal_tic_ID"]) + "_brightness":
         star_with_comparison = list(star_o_with_comparison) + list(star_c_with_comparison)
         all_times = list(np.array(ZTF_o_dataframe["time"])) + list(np.array(ZTF_c_dataframe["time"]))
         signal_brightnesses = {"flux": star_with_comparison, "time": all_times}
-        pd.DataFrame(signal_brightnesses).to_csv("TICs/" + name_identifier + "/" + str(signal_tic_ID.split()[1]) + "_Signal_Brightnesses.csv")
+        pd.DataFrame(signal_brightnesses).to_csv("TICs/" + str(toi_info["tic_ID"]) + "/" + str(toi_info["signal_tic_ID"]) + "_Signal_Brightnesses.csv")
 
 def change_ax_colors(mini_ax, color): # Highlighting certain subplots (like target, saturated, dim, etc.)
     mini_ax.xaxis.label.set_color(color)
@@ -634,12 +635,12 @@ def add_reference_image_patch(ax, mini_all_star_dataframe, mini_clean_dataframe,
     if is_list["ATLAS"]: # Displaying the annulus
         inner_x = (float(list(mini_all_star_dataframe["sigma_x"])[image_index]) * 2 * 3) + (float(list(mini_all_star_dataframe["sigma_x"])[image_index]) * 3)
         inner_y = (float(list(mini_all_star_dataframe["sigma_y"])[image_index]) * 2 * 3) + (float(list(mini_all_star_dataframe["sigma_y"])[image_index]) * 3)
-        annulus_star_patch1 = matplotlib.patches.Ellipse((comparison_star_patch_x - 0.5, comparison_star_patch_y - 0.5), inner_x, inner_y, float(list(mini_all_star_dataframe["theta"])[image_index]), fill = False, color = mini_patch_color, alpha = 0.5)
+        annulus_star_patch1 = matplotlib.patches.Ellipse((comparison_star_patch_x - 0.5, comparison_star_patch_y - 0.5), inner_x, inner_y, angle = float(list(mini_all_star_dataframe["theta"])[image_index]), fill = False, color = mini_patch_color, alpha = 0.5)
         ax.add_patch(annulus_star_patch1)
         
         outer_x = (float(list(mini_all_star_dataframe["sigma_x"])[image_index]) * 2 * 3) + (float(list(mini_all_star_dataframe["sigma_x"])[image_index]) * 3) + (float(list(mini_all_star_dataframe["sigma_x"])[image_index]) * 2 * 3 * 1.5)
         outer_y = (float(list(mini_all_star_dataframe["sigma_y"])[image_index]) * 2 * 3) + (float(list(mini_all_star_dataframe["sigma_y"])[image_index]) * 3) + (float(list(mini_all_star_dataframe["sigma_y"])[image_index]) * 2 * 3 * 1.5)
-        annulus_star_patch2 = matplotlib.patches.Ellipse((comparison_star_patch_x - 0.5, comparison_star_patch_y - 0.5), outer_x, outer_y, float(list(mini_all_star_dataframe["theta"])[image_index]), fill = False, color = mini_patch_color, alpha = 0.5)
+        annulus_star_patch2 = matplotlib.patches.Ellipse((comparison_star_patch_x - 0.5, comparison_star_patch_y - 0.5), outer_x, outer_y, angle = float(list(mini_all_star_dataframe["theta"])[image_index]), fill = False, color = mini_patch_color, alpha = 0.5)
         ax.add_patch(annulus_star_patch2)
     
     comparison_star_patch_label = 0
@@ -894,7 +895,7 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
     
     # Checking if I need to force use ATLAS
     if float(toi_info["dec"]) < -28: # ZTF limits are -28 degrees dec
-        print("dec is past -28 (" + str(dec) + "), which is too far South for ZTF processing. Automatically downloading ATLAS images...")
+        print("dec is past -28 (" + str(toi_info["dec"]) + "), which is too far South for ZTF processing. Automatically downloading ATLAS images...")
         is_list["ATLAS"] = True
     
     

@@ -44,6 +44,7 @@ from astroquery.vizier import Vizier
 
 # Plotting data
 import matplotlib
+matplotlib.use("Agg")  # non-interactive: save to file instead of opening blocking GUI windows
 from matplotlib import pyplot as plot
 from mpl_toolkits.axes_grid1 import make_axes_locatable # Color log
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes # Zoom
@@ -504,7 +505,6 @@ def setup(tic_ID, is_testing, is_processing, is_ATLAS, sigma_coefficient = 1, ne
     if dec < -28: # ZTF limits are -28 degrees dec
         print("dec is past -28 (" + str(dec) + "), which is too far South for ZTF processing. Automatically downloading ATLAS images...")
         is_ATLAS = True
-        sys.exit()
     
     
     # Cone

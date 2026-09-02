@@ -1,0 +1,11 @@
+# Per-target analysis outputs -- these are generated data, not source, and
+# will grow large as we run more targets. Kept locally, not pushed.
+TICs/
+Data/Atlas/
+Data/ztf/
+
+# Local junk
+.DS_Store
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
