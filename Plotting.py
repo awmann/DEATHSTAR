@@ -35,6 +35,8 @@
 import numpy as np
 import pandas as pd
 
+import common
+
 # Plotting data
 import matplotlib
 matplotlib.use("Agg")  # non-interactive: save to file instead of opening blocking GUI windows
@@ -91,11 +93,8 @@ plots_per_page = 12
 
 
 # Private functions
-def get_TOI_info(mini_name_identifier): # Getting the info from tev
-    url = "https://exofop.ipac.caltech.edu/tess/target.php?id=" + mini_name_identifier + "&json"
-    response = urllib.request.urlopen(url)
-    data = json.loads(response.read())
-    return {"ra": str(data["coordinates"]["ra"]), "dec": str(data["coordinates"]["dec"]), "period": float(data["planet_parameters"][1]["per"]), "period_uncertainty": float(data["planet_parameters"][1]["per_e"]), "depth": float(data["planet_parameters"][1]["dep_p"]), "epoch": float(data["planet_parameters"][1]["epoch"]), "epoch_uncertainty": float(data["planet_parameters"][1]["epoch_e"]), "duration": float(data["planet_parameters"][1]["dur"]), "Tmag": float(data["magnitudes"][0]["value"])} # ra, dec, period (days), period_uncertainty, transit_depth (ppm / parts per million), transit_epoch (BJD time of the center of the transit), transit_epoch_uncertainty, transit_duration (hours), target_magnitude (Tmag / TESS magnitude)
+def get_TOI_info(mini_name_identifier, manual_ephemeris=None): # Getting the info from tev, or from a caller-supplied ephemeris for non-alerted targets
+    return common.get_target_info(mini_name_identifier, manual_ephemeris=manual_ephemeris)
 
 # Time conversions
 def display_period_uncertainty(mini_all_star_dataframe, toi_info): # Period uncertainty
@@ -117,14 +116,11 @@ def display_period_uncertainty(mini_all_star_dataframe, toi_info): # Period unce
     return toi_info["period_uncertainty"]
 
 def convert_BJD_and_JD(days, toi_info, BJD_to_JD): # Converting between BJD and JD time
-    URL = "https://astroutils.astronomy.osu.edu/time/convert.php?JDS=" + str(days) + "&RA=" + str(toi_info["ra"]) + "&DEC=" + str(toi_info["dec"]) + "&FUNCTION=utc2bjd"
-    if BJD_to_JD: # Converting from BJD to JD-UTC
-        URL = URL.replace("utc2bjd", "bjd2utc")
-    
-    response = requests.get(URL, verify = False)
-    content = response.content.decode("utf-8") # Returned data
-    
-    return content.replace("\n", "")
+    # was a call to OSU's astroutils convert.php, permanently retired --
+    # see common.py's convert_time_to_bjd docstring. That function returns
+    # a list (batch-call convention); this caller always passes a single
+    # value and expects a single value back.
+    return common.convert_time_to_bjd(days, float(toi_info["ra"]), float(toi_info["dec"]), bjd_to_jd=BJD_to_JD)[0]
 
 def get_transit_BJD_times_offset(toi_info): # Getting the start and end times of transit from the epoch time and the transit duration
     julian_days = convert_BJD_and_JD(toi_info["epoch"], toi_info, True)
@@ -825,7 +821,7 @@ def create_report(tic_ID): # PDF of all the saved images
 
 
 
-def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_period = 0, size = 100, xlim = "zoomed", frame_number = 1, is_plotting = True, is_showing_index = True, is_saving = True, is_plotting_MAD_vs_MAG = True, is_lcbin = False, is_period_revision = False, is_done = False): # Running everything together
+def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_period = 0, size = 100, xlim = "zoomed", frame_number = 1, is_plotting = True, is_showing_index = True, is_saving = True, is_plotting_MAD_vs_MAG = True, is_lcbin = False, is_period_revision = False, is_done = False, manual_ephemeris = None): # Running everything together
     '''
     Arguments:
         tic_ID -- TIC ID of the target to run
@@ -858,7 +854,7 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
     
     
     # Opening the .csvs
-    toi_info = get_TOI_info(str(tic_ID))
+    toi_info = get_TOI_info(str(tic_ID), manual_ephemeris=manual_ephemeris)
     toi_info["tic_ID"] = tic_ID
     toi_info["signal_tic_ID"] = signal_tic_ID
     toi_info["old_period"] = toi_info["period"]

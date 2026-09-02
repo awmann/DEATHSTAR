@@ -9,3 +9,9 @@ Data/ztf/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Per-run batch state/logs/results -- regenerated each run, not source
+atlas_batch_state.json
+batch_atlas_fetch*.log
+batch_score*.log
+*_score_results.json

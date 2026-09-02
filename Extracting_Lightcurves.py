@@ -36,6 +36,8 @@ import numpy as np
 import pandas as pd
 import math
 
+import common
+
 # Astronomical files
 from astropy.io import fits
 from astropy.table import Table
@@ -161,11 +163,9 @@ def tic_advanced_search_position_rows(mini_ra, mini_dec, mini_radius):
     return dataframe
 
 
-def get_TOI_info(mini_tic_ID): # Getting the info from tev
-    url = "https://exofop.ipac.caltech.edu/tess/target.php?id=" + str(mini_tic_ID) + "&json"
-    response = urllib.request.urlopen(url)
-    data = json.loads(response.read())
-    return float(data["coordinates"]["ra"]), float(data["coordinates"]["dec"]), float(data["planet_parameters"][1]["dep_p"]) # ra, dec, transit_depth (ppm / parts per million)
+def get_TOI_info(mini_tic_ID, manual_ephemeris=None): # Getting the info from tev, or from a caller-supplied ephemeris for non-alerted targets
+    info = common.get_target_info(mini_tic_ID, manual_ephemeris=manual_ephemeris)
+    return info["ra"], info["dec"], info["depth"] # ra, dec, transit_depth (ppm / parts per million)
 
 
 def get_distance_from_target(ra_degrees1, dec_degrees1, ra_degrees2, dec_degrees2): # Getting the distance between 2 points of a great circle
@@ -202,14 +202,9 @@ def calculate_time_offset(julian_days, mini_ra, mini_dec, pm_ra, pm_dec): # Chan
     return corrected_ra, corrected_dec
 
 def convert_BJD_and_JD(days, mini_ra, mini_dec, BJD_to_JD):
-    URL = "https://astroutils.astronomy.osu.edu/time/convert.php?JDS=" + str(days) + "&RA=" + str(mini_ra) + "&DEC=" + str(mini_dec) + "&FUNCTION=utc2bjd"
-    if BJD_to_JD: # Converting from BJD to JD-UTC
-        URL = URL.replace("utc2bjd", "bjd2utc")
-    
-    response = requests.get(URL, verify = False)
-    content = response.content.decode("utf-8") # Returned data
-    
-    return list(map(float, content.split("\n")[:-1]))
+    # was a call to OSU's astroutils convert.php, permanently retired --
+    # see common.py's convert_time_to_bjd docstring
+    return common.convert_time_to_bjd(days, mini_ra, mini_dec, bjd_to_jd=BJD_to_JD)
 
 
 # mpyfit aperture brightness extraction
@@ -470,7 +465,7 @@ def download_ZTF_images(mini_tic_ID, mini_ra, mini_dec, mini_cutout_size, mini_i
 
 
 
-def setup(tic_ID, is_testing, is_processing, is_ATLAS, sigma_coefficient = 1, new_fitter = 0): # Running everything together
+def setup(tic_ID, is_testing, is_processing, is_ATLAS, sigma_coefficient = 1, new_fitter = 0, manual_ephemeris = None): # Running everything together
     '''
     Arguments:
         tic_ID -- TIC ID of the target to run.
@@ -479,6 +474,7 @@ def setup(tic_ID, is_testing, is_processing, is_ATLAS, sigma_coefficient = 1, ne
         is_ATLAS -- If is_ATLAS, data from ATLAS will be downloaded and analyzed (otherwise ZTF data will be analyzed). ATLAS data will automatically run if the declination is less than -28 degrees as that is the current bound for ZTF's telescope imaging. Default for is_ATLAS is set to False
         sigma_coefficient -- ratio sizing of the aperture as sometimes a smaller or larger aperture than the mpyfit fit ellipse is preferred. Default for sigma_coefficient is set to 1
         new_fitter -- if the automaticly chosen star for mpyfit aperture fitting is saturated or too close to another star. When new_fitter is not 0, if it is a valid other TIC ID within the star field, it will fit using that chosen star
+        manual_ephemeris -- dict with at least {ra, dec, period, epoch, depth, Tmag} (period in days, epoch in BJD, depth in ppm), used instead of the ExoFOP lookup. Required for any TIC that isn't an alerted TOI with a submitted community fit -- ExoFOP's planet_parameters is empty for those and the default lookup will raise IndexError. Default is None (use ExoFOP).
     '''
     
     
@@ -491,7 +487,7 @@ def setup(tic_ID, is_testing, is_processing, is_ATLAS, sigma_coefficient = 1, ne
     cutout_size = "150" # 150 arcseconds = 2.5 arcminutes
     radius = str(float(cutout_size) * float(math.sqrt(2)) / float(3600)) # Search radius. Cutout_size * root 2 / 2 for each side. Needs to be in decimal degrees 1/120 degrees. Root 2 is for the corners of the image and adds a slight buffer
     #radius = float(cutout_size) / float(3600) # Search radius (not in a square)
-    ra, dec, transit_depth = get_TOI_info(tic_ID)
+    ra, dec, transit_depth = get_TOI_info(tic_ID, manual_ephemeris=manual_ephemeris)
     
     
     # Creating the folders
