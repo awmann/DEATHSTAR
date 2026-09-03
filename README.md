@@ -16,6 +16,25 @@ For more information, watch the **MIT TESS Science Talk (2/28/2024)** presentati
 
 ---
 
+## This fork (awmann/DEATHSTAR)
+
+This is an internally maintained fork of [GGgabbs/DEATHSTAR](https://github.com/GGgabbs/DEATHSTAR) (`upstream` remote), kept because the published southern-declination (ATLAS) path did not run as-is. Everything below is on top of the original pipeline described in the rest of this README; see `git log` for full commit messages, each of which documents the bug, root cause, and verification for that change.
+
+**Fixed:**
+- The ATLAS/southern-declination pipeline (dec < -28°) was non-functional as published: crashes in `get_TOI_info`, a dead OSU time-conversion dependency, `matplotlib` blocking on GUI windows, and `plot_MAD_vs_MAG`'s ATLAS branch computing a figure and never saving it.
+- A silent process kill (no traceback) on some ATLAS frames, caused by a diverged 2D-Gaussian centroid fit sizing a massively oversized photometric aperture — now caught and the frame skipped instead of crashing.
+- `lcbin()` (binned light curve plot) crashed or silently produced an empty panel for ATLAS data (it was written ZTF-only).
+
+**Added:**
+- `common.py` + `manual_ephemeris` parameter (threaded through `DEATHSTAR.setup()`): run DEATHSTAR on any target with a known ra/dec/period/epoch/depth/Tmag, not just alerted ExoFOP TOIs.
+- `atlas_fetch.py`: ATLAS forced-photometry image fetching (submit/poll/download), which the upstream repo never implemented — only ZTF fetching existed. Resumable, concurrency-aware batch fetching via `fetch_atlas_images_batch()`.
+- `is_reference_image` (`setup()` param): skip the one FITS-dependent plot so a target can be re-plotted from its cached `All_<TIC>_Star_Data.csv` (e.g. with a different `signal_tic_ID`) after its raw FITS have been deleted to save disk space.
+- `is_ephemeris_scan` (`setup()` param): phase-folds every extracted field star — not just the target — at the target's ephemeris and flags any with a significant in-transit brightness drop. Complements `is_plotting_MAD_vs_MAG`, which can miss a real, sharp, localized eclipse in an otherwise well-behaved star. See the docstring on `Plotting.ephemeris_scan()` for the false-positive caveats (a bad night's frames can make many field stars "dip" at once — that pattern means systematic, not signal).
+
+**Operational note:** raw FITS/image data for ATLAS or ZTF pulls should never be saved under Dropbox — only under `~/DEATHSTAR/Data` (gitignored) or `/tmp`. Final products (plots, CSVs, writeups) are fine in Dropbox. This came from a real disk-space incident from Dropbox syncing large FITS downloads.
+
+---
+
 ## How DEATHSTAR Kills Planets:
 
 1. 
