@@ -276,8 +276,12 @@ def plot_ATLAS_scatter(mini_ax, column_name, immediate_comparison_stars, horizon
     if column_name == str(toi_info["signal_tic_ID"]) + "_brightness":
         star_with_comparison = list(star_o_with_comparison) + list(star_c_with_comparison)
         all_times = list(np.array(ZTF_o_dataframe["time"])) + list(np.array(ZTF_c_dataframe["time"]))
-        signal_brightnesses = {"flux": star_with_comparison, "time": all_times}
+        signal_brightnesses = {"flux": star_with_comparison, "time": all_times,
+                                "filter": (["o"] * len(star_o_with_comparison) + ["c"] * len(star_c_with_comparison))}
         pd.DataFrame(signal_brightnesses).to_csv("TICs/" + str(toi_info["tic_ID"]) + "/" + str(toi_info["signal_tic_ID"]) + "_Signal_Brightnesses.csv")
+        signal_y_bottom, signal_y_top = mini_ax.get_ylim()
+        toi_info["signal_y_bottom"] = signal_y_bottom
+        toi_info["signal_y_top"] = signal_y_top
 
 def change_ax_colors(mini_ax, color): # Highlighting certain subplots (like target, saturated, dim, etc.)
     mini_ax.xaxis.label.set_color(color)
@@ -529,19 +533,23 @@ def lcbin(toi_info, is_list):
     signal_brightnesses = pd.read_csv("TICs/" + str(toi_info["tic_ID"]) + "/" + str(toi_info["signal_tic_ID"]) + "_Signal_Brightnesses.csv") # Can add as a ZTF .csv and an ATLAS one for plotting ATLAS vs. ZTF as it is the same plot
     
     figure, ax = plot.subplots(1, 2) # 1 row, 2 columns (2 cells total)
-    
-    g = signal_brightnesses[(signal_brightnesses["filter"] == "g")]
-    r = signal_brightnesses[(signal_brightnesses["filter"] == "r")]
-    i = signal_brightnesses[(signal_brightnesses["filter"] == "i")]
+
+    # ax[1] (binned) is filter-agnostic and already worked for ATLAS; ax[0]
+    # (raw, per-filter) was hardcoded to ZTF's g/r/i and silently plotted
+    # nothing at all for ATLAS's o/c filters.
+    if is_list["ATLAS"]:
+        band_defs = [("o", "orange"), ("c", "cyan")]
+    else:
+        band_defs = [("g", "b"), ("r", "r"), ("i", "brown")]
     t = np.array(make_bjd_time_mod_period(np.array(signal_brightnesses["time"]), toi_info["period"], toi_info["epoch"]))
     f = np.array(signal_brightnesses["flux"])
     tbin, fbin, ebin, mask = lcb.lcbin(t, f, int(3 * toi_info["period"] / (toi_info["duration"] / 24))) # The greater number, the noisier the points. 5 is how many points within the transit I want BUT IT HAS TO BE ODD and hope that there isn't a large gap between -pi/2 and pi/2
-    
+
     point_size = 20
-    
-    ax[0].plot(make_bjd_time_mod_period(np.array(g["time"]), toi_info["period"], toi_info["epoch"]), g["flux"], '.', alpha = 0.4, markersize = point_size, color = "b")
-    ax[0].plot(make_bjd_time_mod_period(np.array(r["time"]), toi_info["period"], toi_info["epoch"]), r["flux"], '.', alpha = 0.4, markersize = point_size, color = "r")
-    ax[0].plot(make_bjd_time_mod_period(np.array(i["time"]), toi_info["period"], toi_info["epoch"]), i["flux"], '.', alpha = 0.4, markersize = point_size, color = "brown")
+
+    for band, color in band_defs:
+        band_rows = signal_brightnesses[(signal_brightnesses["filter"] == band)]
+        ax[0].plot(make_bjd_time_mod_period(np.array(band_rows["time"]), toi_info["period"], toi_info["epoch"]), band_rows["flux"], '.', alpha = 0.4, markersize = point_size, color = color)
     ax[1].plot(t, f, '.', alpha = 0.2, markersize = 20, color = "grey")
     ax[1].errorbar(tbin, fbin, yerr = ebin, fmt = "o", color = "r") # Scatter of averaged bins
     
@@ -576,8 +584,9 @@ def lcbin(toi_info, is_list):
     ax[1].tick_params(axis = "x", labelsize = font_size)
     ax[1].tick_params(axis = "y", labelsize = font_size)
     
-    figure.text(0.28, 0.94, "ZTF Light Curve", ha = "center", fontsize = font_size, fontweight = "normal")
-    figure.text(0.76, 0.94, "Averaging of ZTF Light Curve", ha = "center", fontsize = font_size, fontweight = "normal") # Or 'ATLAS Light Curve'
+    survey_name = "ATLAS" if is_list["ATLAS"] else "ZTF"
+    figure.text(0.28, 0.94, survey_name + " Light Curve", ha = "center", fontsize = font_size, fontweight = "normal")
+    figure.text(0.76, 0.94, "Averaging of " + survey_name + " Light Curve", ha = "center", fontsize = font_size, fontweight = "normal")
     figure.text(0.5, 0.01, "Time from mid-transit\nFolded on period " + str(toi_info["period_display"]) + " " + u"\u00B1" + " " + str(toi_info["period_uncertainty_display"]) + " Epoch " + str(toi_info["epoch_display"]) + " " + u"\u00B1" + " " + str(toi_info["epoch_uncertainty_display"]) + " in BJD - 2457000", ha = "center", fontsize = font_size, fontweight = "normal") # Tess Julian Days = Julian Days - 2457000
     figure.text(0.01, 0.5, "Relative Flux", va = "center", rotation = "vertical", fontsize = font_size, fontweight = "normal")
     
