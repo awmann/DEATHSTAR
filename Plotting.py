@@ -453,9 +453,10 @@ def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_rem
         plot.legend(prop = {"size": font_size})
         make_plot_fullscreen()
 
+        mad_signal_suffix = "" if toi_info["signal_tic_ID"] == toi_info["tic_ID"] else "_signal" + str(toi_info["signal_tic_ID"])
         if comparison_removal_values == [0] * len(comparison_removal_values): # Re-run without the worst comparison star
             if is_list["saving"]:
-                save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_FINAL"), figure, False, False)
+                save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_FINAL" + mad_signal_suffix), figure, False, False)
 
             setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = False, is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], is_done = True, manual_ephemeris = manual_ephemeris)
         else:
@@ -465,7 +466,7 @@ def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_rem
             comparison_removal.append(new_comparison_removal)
 
             if is_list["saving"]:
-                save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_" + str(comparison_removal).replace("[", "").replace("]", "")), figure, False, False)
+                save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_" + str(comparison_removal).replace("[", "").replace("]", "") + mad_signal_suffix), figure, False, False)
 
             setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = is_list["plotting_MAD_vs_MAG"], is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], manual_ephemeris = manual_ephemeris)
 
@@ -495,7 +496,7 @@ def plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, l
         figure.subplots_adjust(bottom = 0.15, top = 0.9, left = 0.075, right = 0.975, wspace = 0.1, hspace = 0.35)
         
         if is_list["saving"]:
-            save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/Target_vs_Signal_Lightcurve"), figure, False, True)
+            save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/Target_vs_Signal_Lightcurve_" + str(toi_info["signal_tic_ID"])), figure, False, True)
     
         figure.set_size_inches((19.2, 6.8), forward = True) # If True, overwrite existing window
 
@@ -596,9 +597,10 @@ def lcbin(toi_info, is_list):
         plot.show()
     
     figure.set_size_inches((19.2, 6.8), forward = False)
-    figure.savefig("TICs/" + str(toi_info["tic_ID"]) + "/Binned.png", dpi = 100)
-    figure.savefig("TICs/" + str(toi_info["tic_ID"]) + "/Binned.pdf", dpi = 100)
-    figure.savefig("TICs/" + str(toi_info["tic_ID"]) + "/Binned.svg", dpi = 100)
+    binned_suffix = "" if toi_info["signal_tic_ID"] == toi_info["tic_ID"] else "_signal" + str(toi_info["signal_tic_ID"])
+    figure.savefig("TICs/" + str(toi_info["tic_ID"]) + "/Binned" + binned_suffix + ".png", dpi = 100)
+    figure.savefig("TICs/" + str(toi_info["tic_ID"]) + "/Binned" + binned_suffix + ".pdf", dpi = 100)
+    figure.savefig("TICs/" + str(toi_info["tic_ID"]) + "/Binned" + binned_suffix + ".svg", dpi = 100)
 
 def plot_period_revision(toi_info, mini_all_star_dataframe, mini_cone, mini_clean_dataframe, lists, is_list):
     print("Revising period...")
@@ -842,7 +844,7 @@ def create_report(tic_ID): # PDF of all the saved images
 
 
 
-def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_period = 0, size = 100, xlim = "zoomed", frame_number = 1, is_plotting = True, is_showing_index = True, is_saving = True, is_plotting_MAD_vs_MAG = True, is_lcbin = False, is_period_revision = False, is_done = False, manual_ephemeris = None): # Running everything together
+def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_period = 0, size = 100, xlim = "zoomed", frame_number = 1, is_plotting = True, is_showing_index = True, is_saving = True, is_plotting_MAD_vs_MAG = True, is_lcbin = False, is_period_revision = False, is_done = False, manual_ephemeris = None, is_reference_image = True): # Running everything together
     '''
     Arguments:
         tic_ID -- TIC ID of the target to run
@@ -986,27 +988,31 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
     
     
     # Creating plots
-    plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
+    if is_reference_image:
+        plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
     plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
-    
-    
+
+
     if is_done:
         clear_output(wait = True) # Clearing the output so the jupyter doesn't crash
-        
+
         if is_period_revision:
             plot_period_revision(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list)
-            plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
+            if is_reference_image:
+                plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
             plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
-        
+
         if is_lcbin:
             if not is_period_revision:
-                plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
+                if is_reference_image:
+                    plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
                 plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
-            
+
             lcbin(toi_info, is_list)
-        
+
         if not is_period_revision and not is_lcbin:
-            plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
+            if is_reference_image:
+                plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
             plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
         
         
