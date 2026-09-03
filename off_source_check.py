@@ -33,8 +33,12 @@ for tic, flagged_list in FLAGGED.items():
         t0 = time.time()
         print(f"\n{'='*80}\nTIC{tic} vs flagged field star {flagged}\n{'='*80}")
         try:
+            # is_lcbin only actually fires inside setup()'s "is_done" branch,
+            # which is only reached via the is_plotting_MAD_vs_MAG recursive
+            # comparison-removal loop -- so MAD-vs-MAG has to stay on here
+            # even though we don't care about its own plot for this run.
             setup(tic, is_ATLAS=True, is_overwrite=False, is_lcbin=True,
-                  signal_tic_ID=flagged, is_plotting_MAD_vs_MAG=False,
+                  signal_tic_ID=flagged, is_plotting_MAD_vs_MAG=True,
                   manual_ephemeris=manual_ephemeris, is_reference_image=False)
             print(f"TIC{tic} vs {flagged}: OK in {time.time()-t0:.0f}s")
         except Exception as e:

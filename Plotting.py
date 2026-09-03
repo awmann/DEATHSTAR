@@ -403,7 +403,7 @@ def make_subplots(mini_starting_index, total_number, toi_info, all_star_datafram
     
     make_plot_fullscreen()
 
-def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = None):
+def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = None, is_reference_image = True):
     figure, ax = plot.subplots()
     if is_list["ATLAS"]:
         # ATLAS: was plot-only, with no axis setup, legend, save, or the
@@ -458,7 +458,7 @@ def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_rem
             if is_list["saving"]:
                 save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_FINAL" + mad_signal_suffix), figure, False, False)
 
-            setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = False, is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], is_done = True, manual_ephemeris = manual_ephemeris)
+            setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = False, is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], is_done = True, manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
         else:
             new_comparison_removal_index = comparison_removal_values.index(max(comparison_removal_values)) # Get the highest filter value of any of the comparison stars and remove just that star
             new_comparison_removal = int(lists["MAD_vs_MAG_comparison_names"][new_comparison_removal_index].split("_")[0])
@@ -468,7 +468,7 @@ def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_rem
             if is_list["saving"]:
                 save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_" + str(comparison_removal).replace("[", "").replace("]", "") + mad_signal_suffix), figure, False, False)
 
-            setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = is_list["plotting_MAD_vs_MAG"], is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], manual_ephemeris = manual_ephemeris)
+            setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = is_list["plotting_MAD_vs_MAG"], is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
 
 def plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list):
     if toi_info["tic_ID"] == toi_info["signal_tic_ID"]:
@@ -500,7 +500,7 @@ def plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, l
     
         figure.set_size_inches((19.2, 6.8), forward = True) # If True, overwrite existing window
 
-def plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = None): # Plotting the scatter lightcurves in multiple plots for better legibility
+def plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = None, is_reference_image = True): # Plotting the scatter lightcurves in multiple plots for better legibility
     starting_index = 0
     total_indexes = int(len(clean_dataframe.columns) - 2)
     mod_length = int(total_indexes % plots_per_page)
@@ -525,7 +525,7 @@ def plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists,
         plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list)
         
         if is_list["plotting_MAD_vs_MAG"]:
-            plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
+            plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
         
         plot.show()
 
@@ -990,7 +990,7 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
     # Creating plots
     if is_reference_image:
         plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-    plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
+    plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
 
 
     if is_done:
@@ -1000,20 +1000,20 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
             plot_period_revision(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list)
             if is_reference_image:
                 plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
+            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
 
         if is_lcbin:
             if not is_period_revision:
                 if is_reference_image:
                     plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-                plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
+                plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
 
             lcbin(toi_info, is_list)
 
         if not is_period_revision and not is_lcbin:
             if is_reference_image:
                 plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
+            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris, is_reference_image = is_reference_image)
         
         
         create_report(tic_ID)
