@@ -300,10 +300,30 @@ def get_offset(fits_image, px, py, mini_sigma_coefficient):
     
     print("Subarray size (pixels): (" + str(subarray.shape[0]) + " by " + str(int(subarray.shape[1])) + ")")
     x0, sigma_x, y0, sigma_y, theta = find_ellipse_from_2D_gaussian_fit(np.max(fits_image), median, subarray) # Degrees
+
+    # mpfit's Levenberg-Marquardt fit can diverge to unphysical values on a
+    # bad frame (e.g. elevated/uneven background, poor initial guess) with
+    # no error raised -- seen concretely as sigma_x ~2000 on a 20x20
+    # subarray. That sigma then sizes an EllipticalAperture applied to every
+    # star in the field in get_brightness(), which for a wild-enough sigma
+    # blows up memory badly enough to get the whole process killed by the
+    # OS with no traceback. Reject clearly-diverged fits here instead --
+    # ValueError is already caught and the frame skipped by setup()'s loop.
+    subarray_size = max(subarray.shape)
+    if (not np.isfinite([x0, sigma_x, y0, sigma_y, theta]).all()
+            or sigma_x <= 0 or sigma_y <= 0
+            or sigma_x > subarray_size or sigma_y > subarray_size
+            or not (-subarray_size <= x0 <= 2 * subarray_size)
+            or not (-subarray_size <= y0 <= 2 * subarray_size)):
+        raise ValueError(
+            f"2D Gaussian fit diverged (x0={x0}, y0={y0}, sigma_x={sigma_x}, "
+            f"sigma_y={sigma_y} on a {subarray_size}px subarray) -- skipping frame"
+        )
+
     sigma_x = sigma_x * mini_sigma_coefficient # 2 will get more of the fallout of brightness, whereas 0.9 will be a tighter aperture
     sigma_y = sigma_y * mini_sigma_coefficient
-    
-    
+
+
     return fits_image_without_median, int(subarray.shape[0]), x0, sigma_x, y0, sigma_y, theta
 
 

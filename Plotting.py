@@ -946,7 +946,12 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
     
     for bad_comparison_tic_ID in comparison_removal:
         if not str(bad_comparison_tic_ID) == str(signal_tic_ID):
-            lists["comparison_stars"].remove(str(bad_comparison_tic_ID) + "_brightness")
+            bad_comparison_name = str(bad_comparison_tic_ID) + "_brightness"
+            if bad_comparison_name in lists["comparison_stars"]:
+                lists["comparison_stars"].remove(bad_comparison_name)
+            # else: this recursion's fresh comparison-star selection didn't
+            # include it in the first place (e.g. failed a data-quality
+            # check this pass) -- already effectively excluded, not an error
     
     clean_dataframe[str(toi_info["signal_tic_ID"]) + "_brightness"] = all_star_dataframe[str(toi_info["signal_tic_ID"]) + "_brightness"] # Adding the signal
     clean_dataframe[str(toi_info["tic_ID"]) + "_brightness"] = all_star_dataframe[str(toi_info["tic_ID"]) + "_brightness"] # Adding the target
