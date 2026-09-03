@@ -399,29 +399,41 @@ def make_subplots(mini_starting_index, total_number, toi_info, all_star_datafram
     
     make_plot_fullscreen()
 
-def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done):
+def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = None):
     figure, ax = plot.subplots()
     if is_list["ATLAS"]:
+        # ATLAS: was plot-only, with no axis setup, legend, save, or the
+        # iterative bad-comparison-star removal the ZTF branch below has --
+        # the figure was silently discarded every time. Now built to full
+        # parity with the ZTF branch (2 filters -- o/c -- instead of 3).
+        figure.text(0.5, 0.9, "MAD vs. MAG", ha = "center", fontsize = font_size, fontweight = "bold")
+        figure.text(0.5, 0.01, "TESS magnitude of star (MAG)", ha = "center", fontsize = font_size, fontweight = "normal")
+        figure.text(0.03, 0.5, "Median absolute deviation of star noise (MAD)", va = "center", rotation = "vertical", fontsize = font_size, fontweight = "normal")
+
         ax.plot(lists["MAG"], lists["MAD"]["o"], ".", color = "orange", label = "Orange Filter")
         ax.plot(lists["MAG"], lists["MAD"]["c"], ".", color = "cyan", label = "Cyan Filter")
-        ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["o"], "*", color = "orange", label = "Orange Filter", markersize = 5)
-        ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["c"], "*", color = "cyan", label = "Cyan Filter", markersize = 5)
+        ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["o"], "*", color = "orange", label = "Orange Filter (comparison)", markersize = 5)
+        ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["c"], "*", color = "cyan", label = "Cyan Filter (comparison)", markersize = 5)
+
+        comparison_removal_values = []
         for i in range(len(lists["MAD_vs_MAG_comparison_names"])):
             ax.text(lists["MAG_comparison"][i], lists["MAD_comparison"]["c"][i] + 0.05, lists["MAD_vs_MAG_comparison_names"][i].split("_")[0])
-            if lists["MAD_comparison"]["c"][i] > 0.1:
-                print('comparison_stars_list.remove("' + str(lists["MAD_vs_MAG_comparison_names"][i]) + '")')
+            if (lists["MAD_comparison"]["o"][i] > 0.1) or (lists["MAD_comparison"]["c"][i] > 0.1):
+                comparison_removal_values.append(max(lists["MAD_comparison"]["o"][i], lists["MAD_comparison"]["c"][i])) # Adding the highest of the 2 filters
+            else:
+                comparison_removal_values.append(0) # Just to keep the indicies correct
     else:
         figure.text(0.5, 0.9, "MAD vs. MAG", ha = "center", fontsize = font_size, fontweight = "bold")
         figure.text(0.5, 0.01, "TESS magnitude of star (MAG)", ha = "center", fontsize = font_size, fontweight = "normal")
         figure.text(0.03, 0.5, "Median absolute deviation of star noise (MAD)", va = "center", rotation = "vertical", fontsize = font_size, fontweight = "normal")
-        
+
         ax.plot(lists["MAG"], lists["MAD"]["g"], ".", color = "b", label = "Green Filter")
         ax.plot(lists["MAG"], lists["MAD"]["r"], ".", color = "r", label = "Red Filter")
         ax.plot(lists["MAG"], lists["MAD"]["i"], ".", color = "brown", label = "IR Filter")
         ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["g"], "*", color = "b", label = "Green Filter (comparison)", markersize = 5)
         ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["r"], "*", color = "r", label = "Red Filter (comparison)", markersize = 5)
         ax.plot(lists["MAG_comparison"], lists["MAD_comparison"]["i"], "*", color = "brown", label = "IR Filter (comparison)", markersize = 5)
-        
+
         comparison_removal_values = []
         for i in range(len(lists["MAD_vs_MAG_comparison_names"])):
             ax.text(lists["MAG_comparison"][i], lists["MAD_comparison"]["g"][i] + 0.05, lists["MAD_vs_MAG_comparison_names"][i].split("_")[0])
@@ -429,29 +441,29 @@ def plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_rem
                 comparison_removal_values.append(max(lists["MAD_comparison"]["g"][i], lists["MAD_comparison"]["r"][i], lists["MAD_comparison"]["i"][i])) # Adding the highest of the 3 filters
             else:
                 comparison_removal_values.append(0) # Just to keep the indicies correct
-        
-        if not is_done:
-            ax.set_ylim([0, 0.3])
-            ax.axhline(0.1, linestyle = "--", color = transit_boundary_color, zorder = 10, label = "Automatic cutoff")
-            ax.tick_params(axis = "both", labelsize = font_size)
-            plot.legend(prop = {"size": font_size})
-            make_plot_fullscreen()
-            
-            if comparison_removal_values == [0] * len(comparison_removal_values): # Re-run without the worst comparison star
-                if is_list["saving"]:
-                    save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_FINAL"), figure, False, False)
-                
-                setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = False, is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], is_done = True)
-            else:
-                new_comparison_removal_index = comparison_removal_values.index(max(comparison_removal_values)) # Get the highest filter value of any of the comparison stars and remove just that star
-                new_comparison_removal = int(lists["MAD_vs_MAG_comparison_names"][new_comparison_removal_index].split("_")[0])
-                print("Removing " + str(new_comparison_removal))
-                comparison_removal.append(new_comparison_removal)
-                
-                if is_list["saving"]:
-                    save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_" + str(comparison_removal).replace("[", "").replace("]", "")), figure, False, False)
-                    
-                setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = is_list["plotting_MAD_vs_MAG"], is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"])
+
+    if not is_done:
+        ax.set_ylim([0, 0.3])
+        ax.axhline(0.1, linestyle = "--", color = transit_boundary_color, zorder = 10, label = "Automatic cutoff")
+        ax.tick_params(axis = "both", labelsize = font_size)
+        plot.legend(prop = {"size": font_size})
+        make_plot_fullscreen()
+
+        if comparison_removal_values == [0] * len(comparison_removal_values): # Re-run without the worst comparison star
+            if is_list["saving"]:
+                save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_FINAL"), figure, False, False)
+
+            setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = False, is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], is_done = True, manual_ephemeris = manual_ephemeris)
+        else:
+            new_comparison_removal_index = comparison_removal_values.index(max(comparison_removal_values)) # Get the highest filter value of any of the comparison stars and remove just that star
+            new_comparison_removal = int(lists["MAD_vs_MAG_comparison_names"][new_comparison_removal_index].split("_")[0])
+            print("Removing " + str(new_comparison_removal))
+            comparison_removal.append(new_comparison_removal)
+
+            if is_list["saving"]:
+                save_plot(("TICs/" + str(toi_info["tic_ID"]) + "/TIC_" + str(toi_info["tic_ID"]) + "_MAD_vs_MAG_" + str(comparison_removal).replace("[", "").replace("]", "")), figure, False, False)
+
+            setup(toi_info["tic_ID"], is_list["ATLAS"], comparison_removal = comparison_removal, signal_tic_ID = toi_info["signal_tic_ID"], revised_period = toi_info["period"], size = size, xlim = toi_info["xlim"], frame_number = frame_number, is_plotting = is_list["plotting"], is_showing_index = is_list["showing_index"], is_saving = is_list["saving"], is_plotting_MAD_vs_MAG = is_list["plotting_MAD_vs_MAG"], is_lcbin = is_list["lcbin"], is_period_revision = is_list["period_revision"], manual_ephemeris = manual_ephemeris)
 
 def plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list):
     if toi_info["tic_ID"] == toi_info["signal_tic_ID"]:
@@ -483,7 +495,7 @@ def plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, l
     
         figure.set_size_inches((19.2, 6.8), forward = True) # If True, overwrite existing window
 
-def plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done): # Plotting the scatter lightcurves in multiple plots for better legibility
+def plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = None): # Plotting the scatter lightcurves in multiple plots for better legibility
     starting_index = 0
     total_indexes = int(len(clean_dataframe.columns) - 2)
     mod_length = int(total_indexes % plots_per_page)
@@ -508,7 +520,7 @@ def plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists,
         plot_signal_vs_target(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list)
         
         if is_list["plotting_MAD_vs_MAG"]:
-            plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done)
+            plot_MAD_vs_MAG(toi_info, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
         
         plot.show()
 
@@ -961,7 +973,7 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
     
     # Creating plots
     plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-    plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done)
+    plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
     
     
     if is_done:
@@ -970,18 +982,18 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
         if is_period_revision:
             plot_period_revision(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list)
             plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done)
+            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
         
         if is_lcbin:
             if not is_period_revision:
                 plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-                plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done)
+                plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
             
             lcbin(toi_info, is_list)
         
         if not is_period_revision and not is_lcbin:
             plot_reference_image(frame_number, toi_info, all_star_dataframe, clean_dataframe, lists, size, is_list)
-            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done)
+            plot_lightcurves(toi_info, all_star_dataframe, cone, clean_dataframe, lists, is_list, size, frame_number, comparison_removal, is_done, manual_ephemeris = manual_ephemeris)
         
         
         create_report(tic_ID)
