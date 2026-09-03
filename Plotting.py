@@ -843,8 +843,89 @@ def create_report(tic_ID): # PDF of all the saved images
     print("Done!")
 
 
+def ephemeris_scan(toi_info, all_star_dataframe, cone, is_list, sig_threshold = 6.0, frac_depth_threshold = 0.03, max_flagged = 10):
+    '''
+    Phase-folds EVERY extracted star in the field (not just the chosen
+    comparison ensemble) at the target's ephemeris and flags any star with
+    a significant, deep in-transit brightness drop.
 
-def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_period = 0, size = 100, xlim = "zoomed", frame_number = 1, is_plotting = True, is_showing_index = True, is_saving = True, is_plotting_MAD_vs_MAG = True, is_lcbin = False, is_period_revision = False, is_done = False, manual_ephemeris = None, is_reference_image = True): # Running everything together
+    This complements MAD-vs-MAG rather than replacing it: MAD is a robust
+    whole-light-curve statistic, so a real, sharp, localized eclipse in an
+    otherwise well-behaved star can leave the star's overall MAD unflagged
+    (a single eclipse's worth of points barely moves a median computed over
+    hundreds of otherwise-normal points). A star flagged here is a
+    candidate true source of the "planet" signal seen in tic_ID's TESS
+    aperture -- confirm it visually with signal_tic_ID = the flagged TIC
+    (Target_vs_Signal_Lightcurve_<flagged>.png) before drawing any
+    conclusion. This is a coarse significance test on unevenly-sampled,
+    mixed-systematics ground-based photometry: both real eclipses and
+    common-mode systematics (e.g. one bad night's frames hitting every star
+    in the field at once) can trigger it, so a cluster of many flagged
+    stars at once is a red flag for the latter, not many simultaneous
+    detections.
+
+    Arguments:
+        sig_threshold -- minimum (out-of-transit-scatter-based) significance of the in-transit brightness drop to flag a star. Default 6.0
+        frac_depth_threshold -- minimum fractional depth to flag a star, so a formally "significant" but astrophysically tiny wiggle isn't flagged. Default 0.03 (3%)
+        max_flagged -- cap on how many flagged stars are printed/saved, most significant first. Default 10
+    '''
+    t = np.array(all_star_dataframe["time"])
+    half_dur_d = max((toi_info["duration"] / 24.0) / 2.0, 0.01)
+    phase = make_bjd_time_mod_period(t, toi_info["period"], toi_info["epoch"])
+    in_tr = np.abs(phase) < half_dur_d
+    out_tr = ~in_tr
+
+    results = []
+    if in_tr.sum() >= 3 and out_tr.sum() >= 10:
+        star_cols = [c for c in all_star_dataframe.columns if c.endswith("_brightness")]
+        for col in star_cols:
+            star_tic = col.replace("_brightness", "")
+            f = np.array(all_star_dataframe[col], dtype = float)
+            f_in = f[in_tr]
+            f_out = f[out_tr]
+            f_in = f_in[np.isfinite(f_in) & (f_in != 0)]
+            f_out = f_out[np.isfinite(f_out) & (f_out != 0)]
+            if len(f_in) < 3 or len(f_out) < 10:
+                continue
+            out_std = np.std(f_out)
+            if out_std <= 0:
+                continue
+            out_mean = np.mean(f_out)
+            in_mean = np.mean(f_in)
+            depth = out_mean - in_mean
+            sig = depth / (out_std / np.sqrt(len(f_in)))
+            frac_depth = depth / out_mean
+            if sig > sig_threshold and frac_depth > frac_depth_threshold:
+                row = {"tic_ID": star_tic, "is_target": (str(star_tic) == str(toi_info["tic_ID"])),
+                       "n_in": len(f_in), "n_out": len(f_out), "sig": round(sig, 1),
+                       "frac_depth_pct": round(frac_depth * 100, 1)}
+                try:
+                    idx = int(np.where(cone["ID"] == int(star_tic))[0][0])
+                    row["separation_arcsec"] = round(float(np.nanmean(all_star_dataframe[str(star_tic) + "_distance_to_real_target"])), 1)
+                    row["Tmag"] = round(float(cone.at[idx, "Tmag"]), 1)
+                except (IndexError, KeyError, ValueError):
+                    pass
+                results.append(row)
+
+    results.sort(key = lambda r: -r["sig"])
+    results = results[:max_flagged]
+
+    if results:
+        print(str(len(results)) + " star(s) flagged by the ephemeris scan (in-transit brightness drop, sig > " + str(sig_threshold) + ", depth > " + str(frac_depth_threshold * 100) + "%):")
+        for r in results:
+            flag = " <-- TARGET" if r["is_target"] else ""
+            print("  TIC " + str(r["tic_ID"]) + ": sig=" + str(r["sig"]) + ", depth=" + str(r["frac_depth_pct"]) + "%, n_in=" + str(r["n_in"]) + flag)
+    else:
+        print("Ephemeris scan: no field star (including the target) showed a significant in-transit brightness drop.")
+
+    if is_list["saving"]:
+        pd.DataFrame(results).to_csv("TICs/" + str(toi_info["tic_ID"]) + "/Ephemeris_Scan_Flagged.csv", index = False)
+
+    return results
+
+
+
+def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_period = 0, size = 100, xlim = "zoomed", frame_number = 1, is_plotting = True, is_showing_index = True, is_saving = True, is_plotting_MAD_vs_MAG = True, is_lcbin = False, is_period_revision = False, is_done = False, manual_ephemeris = None, is_reference_image = True, is_ephemeris_scan = False): # Running everything together
     '''
     Arguments:
         tic_ID -- TIC ID of the target to run
@@ -861,6 +942,7 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
         is_plotting_MAD_vs_MAG -- if is plotting noise diagnostic plot (max median absolute deviation versus TESS magnitude). This diagnostic helps identify noisy comparison stars if they need to be removed and gives a visual how clean the light curves of all the stars in the field are. Default for is_plotting_MAD_vs_MAG is set to True
         is_lcbin -- if is plotting the binned light curves for easier viewing of shallower or messier transit light curves. The averaged light curves will be displayed on the tic_ID (or signal_tic_ID if provided). Default for is_lcbin is set to False
         is_period_revision -- if is preforming a Box-Least Squares period revison function. If set to True, a period will be tested on the light curve tic_ID (or the signal_tic_ID if provided) and display the transit folded on the original versus edited periods. Default for is_period_revision is set to False
+        is_ephemeris_scan -- if True, phase-folds every extracted field star (not just tic_ID) at the target's ephemeris and flags any with a significant in-transit brightness drop -- catches off-target contaminants that MAD-vs-MAG can miss (see ephemeris_scan() docstring). Results print and save to TICs/[TIC ID]/Ephemeris_Scan_Flagged.csv. Default for is_ephemeris_scan is set to False
         is_done -- interior argument used exclusively for running this program. DO NOT CHANGE. If a compsrison star has a large max median absolute deviation, it will be automatically removed and is_done will be updated to rerun this program without that comparison star. This process will repeat until all comparison stars have a max median absolute deviation less than 0.2. Default for is_done is set to False
         '''
     
@@ -892,8 +974,12 @@ def setup(tic_ID, is_ATLAS, comparison_removal = [], signal_tic_ID = 0, revised_
         all_star_dataframe.rename(columns = {"jd_time": "time"}, inplace = True) # In case program crashed
     all_star_dataframe = all_star_dataframe.dropna(subset = list(all_star_dataframe.columns[14:]), how = "all")
     cone = pd.read_csv("TICs/" + str(toi_info["tic_ID"]) + "/" + str(toi_info["tic_ID"]) + "_Cone.csv")
-    
-    
+
+
+    if is_ephemeris_scan:
+        ephemeris_scan(toi_info, all_star_dataframe, cone, is_list = {"saving": is_saving})
+
+
     # Converting and getting the display values
     toi_info["period_uncertainty"] = display_period_uncertainty(all_star_dataframe, toi_info)
     toi_info["depth"] = toi_info["depth"] / 1000000 # Converting transit depth from ppm to a fraction
