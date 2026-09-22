@@ -22,7 +22,8 @@ use_reduced=True asks for reduced (not difference) images -- DEATHSTAR does
 its own multi-star aperture photometry across the field, which needs actual
 per-epoch flux levels, not sky-subtracted differences.
 
-Auth: export ATLAS_USERNAME / ATLAS_PASSWORD, or ATLAS_TOKEN directly.
+Auth: export ATLAS_USERNAME / ATLAS_PASSWORD, or ATLAS_TOKEN (or
+ATLAS_API_TOKEN) directly.
 """
 import os
 import io
@@ -36,7 +37,7 @@ BASE = "https://fallingstar-data.com/forcedphot"
 
 
 def get_token(username=None, password=None):
-    token = os.environ.get("ATLAS_TOKEN")
+    token = os.environ.get("ATLAS_TOKEN") or os.environ.get("ATLAS_API_TOKEN")
     if token:
         return token
     username = username or os.environ["ATLAS_USERNAME"]
