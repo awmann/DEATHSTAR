@@ -102,6 +102,58 @@ def delete_task(token, task_id):
     return r.status_code
 
 
+def _alive(pid):
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, TypeError, ValueError):
+        return False
+    return True
+
+
+def sweep_orphan_imgzip(token, out_base="Data/Atlas"):
+    """Delete finished IMGZIP tasks whose owning fetch process has died.
+
+    2026-10-27: the account sat at its 5-task cap for hours ("You have too many
+    IMGZIP tasks (5 >= 5)") because runs killed by PetCare's 2-hour timeout
+    left finished image tasks behind, and every later run then retried
+    requestimages() every 20 s until it too was killed.  Only tasks recorded
+    in a fetch_state file with an ``img_owner_pid`` that is no longer running
+    are touched -- tasks this code created and tracked, per delete_task's rule.
+    Unfinished ones are left to finish and are swept on a later pass.
+    Returns the number deleted."""
+    import glob
+    import json as _json
+    n = 0
+    for f in glob.glob(os.path.join(out_base, "fetch_state_*.json")):
+        try:
+            jobs = _json.load(open(f))
+        except (OSError, ValueError):
+            continue
+        changed = False
+        for tic, j in jobs.items():
+            tid, pid = j.get("img_task_id"), j.get("img_owner_pid")
+            if not tid or pid is None or _alive(pid):
+                continue
+            try:
+                t = get_task(token, tid)
+            except Exception:  # noqa: BLE001 - already gone, or the API is down
+                t = {"finished": True}
+            if not t.get("finished"):
+                continue
+            delete_task(token, tid)
+            j.pop("img_task_id", None)
+            j.pop("img_owner_pid", None)
+            if j.get("state") == "img_pending":
+                j["state"] = "fp_pending"
+            changed = True
+            n += 1
+        if changed:
+            _json.dump(jobs, open(f, "w"), indent=2)
+    if n:
+        print(f"freed {n} orphaned IMGZIP slot(s) left by dead fetches")
+    return n
+
+
 def download_and_unzip(url, out_dir, token=None):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -189,16 +241,19 @@ def fetch_atlas_images_batch(targets, mjd_min, mjd_max, use_reduced=True,
     if state_path:
         _json.dump(jobs, open(state_path, "w"), indent=2)
 
-    in_flight = {tic: j["task_id"] for tic, j in jobs.items()
-                 if j.get("state") == "img_pending" and "img_task_id" in j}
-    # (img_task_id isn't tracked across resumes today -- a resumed
-    # img_pending job is treated as needing a fresh requestimages() call;
-    # harmless, just re-requests)
-    for tic, j in jobs.items():
-        if j.get("state") == "img_pending":
-            j["state"] = "fp_pending"
+    sweep_orphan_imgzip(token, out_base)
 
+    # A resumed img_pending job takes its image task back: re-requesting is
+    # NOT harmless -- the old task keeps its slot until someone deletes it,
+    # and the cap is 5 per account across every process.
     in_flight_imgzip = {}
+    for tic, j in jobs.items():
+        if j.get("state") == "img_pending" and j.get("img_task_id"):
+            in_flight_imgzip[tic] = j["img_task_id"]
+            j["img_owner_pid"] = os.getpid()
+        elif j.get("state") == "img_pending":
+            j["state"] = "fp_pending"
+    cap_noted = False
     t_start = time.time()
     while time.time() - t_start < timeout_s:
         n_done = sum(1 for j in jobs.values() if j.get("state") in ("done", "error"))
@@ -229,6 +284,8 @@ def fetch_atlas_images_batch(targets, mjd_min, mjd_max, use_reduced=True,
                 job["state"] = "error"; job["error"] = "no zip url"
             delete_task(token, img_task_id)
             del in_flight_imgzip[tic]
+            job.pop("img_task_id", None)
+            job.pop("img_owner_pid", None)
 
         if state_path:
             _json.dump(jobs, open(state_path, "w"), indent=2)
@@ -250,17 +307,30 @@ def fetch_atlas_images_batch(targets, mjd_min, mjd_max, use_reduced=True,
                     continue
                 if not t.get("finished"):
                     continue
-                try:
-                    request_images(token, job["task_id"])
-                    t2 = get_task(token, job["task_id"])
-                except Exception as e:
-                    print(f"TIC{tic}: requestimages failed (will retry): {e}")
-                    continue
-                img_task_id = t2.get("imagerequest_task_id")
+                # an earlier, killed run may already have asked for this
+                # task's images: take that request over instead of making
+                # another (which the cap refuses while the old one sits there)
+                img_task_id = t.get("imagerequest_task_id")
+                if img_task_id is None:
+                    try:
+                        request_images(token, job["task_id"])
+                        t2 = get_task(token, job["task_id"])
+                    except Exception as e:
+                        if "too many IMGZIP" in str(e):
+                            if not cap_noted:
+                                print("ATLAS account IMGZIP cap full (5/5); waiting for a slot")
+                                cap_noted = True
+                                sweep_orphan_imgzip(token, out_base)
+                        else:
+                            print(f"TIC{tic}: requestimages failed (will retry): {e}")
+                        continue
+                    img_task_id = t2.get("imagerequest_task_id")
                 if img_task_id is None:
                     continue
                 in_flight_imgzip[tic] = img_task_id
                 job["state"] = "img_pending"
+                job["img_task_id"] = img_task_id
+                job["img_owner_pid"] = os.getpid()
                 free_slots -= 1
                 print(f"TIC{tic}: requested images ({len(in_flight_imgzip)}/{max_concurrent_imgzip} slots used)")
 
